@@ -9,19 +9,19 @@ import mpl_toolkits.axes_grid1
 import seaborn as sns
 from glob import glob
 
+
 # try:
 #     %matplotlib inline
 #     %config InlineBackend.figure_format = 'jpg'
 # except:
 #     pass
-sns.set_style("ticks", {"xtick.direction": "in", "ytick.direction": "in"})
-sns.set_context("talk")
+# sns.set_style("ticks", {"xtick.direction": "in", "ytick.direction": "in"})
     
 
 class Page:
     def __init__(self, path, rms=None, xy_extent=None):
         self.path = path
-        self.figsize = (7,7)
+        self.fig, self.ax = plt.subplots(figsize=(7,9))
         self.get_fits()
         self.set_rms(rms, xy_extent)
         
@@ -58,29 +58,31 @@ class Page:
             self.rms = np.sqrt(np.mean(np.array(rms_pixels)**2)) 
     
     def make_page(self, extent=None, sigma_interval=2):
-        self.fig, self.ax = plt.subplots(figsize=self.figsize)
         if extent != None:
             xmin, xmax = -extent, extent;  ymin, ymax = -extent, extent
             self.ax.set_xlim(xmax, xmin);       self.ax.set_ylim(ymin, ymax)
             self.ax.grid(False)
     
         # Set x and y major and minor tics
-        majorLocator = mpl.ticker.AutoLocator()
-        self.ax.xaxis.set_major_locator(majorLocator)
-        self.ax.yaxis.set_major_locator(majorLocator)
+        # majorLocator = mpl.ticker.AutoLocator()
+        # self.ax.xaxis.set_major_locator(majorLocator)
+        # self.ax.yaxis.set_major_locator(majorLocator)
 
         # Set x and y labels
-        self.ax.set_xlabel(r'$\Delta \alpha$ (")', fontsize=18)
-        self.ax.set_ylabel(r'$\Delta \delta$ (")', fontsize=18)
-        self.ax.tick_params(which='both', right='on', labelsize=18, direction='in')
-        self.ax.tick_params(axis='y', labelright='off', right='on')
-            
+        self.ax.set_xlabel(r'$\Delta \alpha$ (")')
+        self.ax.set_ylabel(r'$\Delta \delta$ (")')
+        # self.ax.tick_params(which='both', right='on', labelsize=18, direction='in')
+        # self.ax.tick_params(axis='y', labelright='off', right='on')
+        
+        self.ax.set_aspect('equal'); 
         try:
-            contour_levels = np.arange(sigma_interval, 100, sigma_interval) * self.rms # 3\sigma
-            contours = self.ax.contour(self.ra_offset, self.dec_offset, self.im,
+            min_sigma = np.ceil(self.im.min() / self.rms)
+            max_sigma = np.ceil(self.im.max() / self.rms)
+            contour_levels = np.arange(min_sigma, max_sigma, 1)
+            contours = self.ax.contour(self.ra_offset, self.dec_offset, self.im/self.rms,
                 colors='k', levels=contour_levels, 
                 linewidths=0.75, linestyles='solid')
-            self.ax.contour(self.ra_offset, self.dec_offset, self.im,
+            self.ax.contour(self.ra_offset, self.dec_offset, self.im/self.rms,
                 levels=np.flip(contour_levels, axis=0) * -1,
                 colors='k', linewidths=0.75, linestyles='dashed')
         except AttributeError:
@@ -92,25 +94,27 @@ class Page:
         cax = divider.append_axes("top", size="8%", pad=0.0)
         cmap = mpl.colors.LinearSegmentedColormap.from_list('white', [(1,1,1), (1,1,1)], N=1000)
         cbar = mpl.colorbar.ColorbarBase(cmap=cmap, ax=cax, 
-            norm=mpl.colors.Normalize(vmin=self.im.min(), vmax=self.im.max()), 
+            norm=mpl.colors.Normalize(vmin=self.im.min()/self.rms, vmax=self.im.max()/self.rms), 
             orientation='horizontal')
-        cbar.ax.xaxis.set_tick_params(which='major', direction='out', length=3,
-            bottom='off', top='on', labelsize=8, pad=-2, labeltop='on', 
-            labelbottom='off')
-        cbar.ax.xaxis.set_tick_params(which='minor', direction='out', length=2, 
-            bottom='off', top='on')
+        cbar.ax.xaxis.set_tick_params(which='major', direction='out', 
+        bottom='off', top='on', labeltop='on', labelbottom='off',
+        length=5, pad=1.5)
+        cbar.ax.set_xticklabels([r'${}\sigma$'.format(int(sigma_val)) for sigma_val in cbar.get_ticks()])
+        self.fontsize = self.ax.xaxis.label.get_size()
         
-        try:
-            min_sigma = int(self.im.min() / self.rms)
-            cbar.set_ticks(list(-contour_levels)[::-1] + [0] + list(contour_levels))
-            print([r'${}\sigma$'.format(level) for level in range(-sigma_interval, min_sigma, -sigma_interval)])
-            cbar.ax.set_xticklabels(
-                [r'${}\sigma$'.format(level) for level in range(-sigma_interval, min_sigma, -sigma_interval)] \
-                + ['0'] \
-                + [r'${}\sigma$'.format(int(val/self.rms)) for val in contour_levels], 
-                fontsize=18)
-        except UnboundLocalError:
-            pass
+        # try:
+        #     if min_sigma == -sigma_interval: 
+        #         min_sigma -= 1
+        #     cbar.set_ticks(list(-contour_levels)[::-1] + [0] + list(contour_levels))
+        #     cbar_labels = [ r'${}\sigma$'.format(level)
+        #         for level in range(-sigma_interval, min_sigma, -sigma_interval)] \
+        #         + ['0'] \
+        #         + [r'${}\sigma$'.format(int(val/self.rms)) \
+        #             for val in contour_levels]
+        #     cbar.ax.set_xticklabels(cbar_labels)
+        # 
+        # except (UnboundLocalError, AttributeError):
+        #     pass
 
         # Overplot the beam ellipse
         try:
@@ -146,11 +150,6 @@ class ColoringBook:
             page.make_page()
             page.quickview()
     
-    def add_text(self, subplot_index, x, y, text):
-        self.axes[subplot_index].text(x, y, text, fontsize=18,
-            path_effects=[mpl.patheffects.withStroke(linewidth=3, 
-            foreground="w")])
-            
     def add_title(self, title):
         plt.suptitle(self.title)
     
@@ -164,21 +163,29 @@ class ColoringBook:
 # files
 # f = files[0]
 
-# paths = ['fits_files/' + path for path in ['49_Ceti_cdaley.fits', 'AU_Mic_cdaley.fits', 'TYC_4496_fenclada.fits']]
-cb = ColoringBook()
-aumic = Page('fits_files/AU_Mic_cdaley.fits', xy_extent=[4,4])
-aumic.make_page(extent=4, sigma_interval=5); 
-aumic.ax.text(3.6, 3.3, 'AU Mic ALMA 1.4mm')
-aumic.ax.text(3.6, 2.7, 'rms = {} '.format(int(aumic.rms.round())) + aumic.unit)
+# paths = ['fits_files/' + path for path in ['49_page_cdaley.fits', 'AU_Mic_cdaley.fits', 'TYC_4496_fenclada.fits']]
+# cb = ColoringBook()
+fontsize=13
+left, right, top, bottom = 0.12, 0.7, 0.05, 0.02
+
+# page = Page('fits_files/AU_Mic_cdaley.fits', xy_extent=[4,4])
+# page.make_page(extent=5, sigma_interval=5); 
+# page.fig.text(left, top, r'AU Mic ALMA 1.4mm', fontsize=page.fontsize)
+# page.fig.text(left, bottom, 'Cail Daley', fontsize=page.fontsize)
+# page.fig.text(right, top, 'rms = {} '.format(int(page.rms.round())) + page.unit, fontsize=page.fontsize)
+# plt.tight_layout()
+# plt.savefig('AU_Mic', dpi=100)
+# plt.show()
+# 
+# page = Page('fits_files/49_ceti_cdaley.fits', xy_extent=[4,3])
+# page.make_page(sigma_interval=3)
+# page.fig.text(left, top, '49 Ceti ALMA 850 $\mu$m', fontsize=page.fontsize)
+# page.fig.text(left, bottom, 'Cail Daley', fontsize=page.fontsize)
+# page.fig.text(right, top, 'rms = {} '.format(int(page.rms.round())) + page.unit, fontsize=page.fontsize)
+# plt.tight_layout()
+# plt.show()
+
+page = Page('fits_files/TYC_4496_fenclada.fits', xy_extent=[3,3])
+page.make_page(sigma_interval=3, extent=3)
 plt.show()
-
-ceti = Page('fits_files/49_Ceti_cdaley.fits', xy_extent=[4,3])
-ceti.make_page(sigma_interval=3)
-ceti.im.min()/ceti.rms
-ceti.ax.text(3.6, 4.1, '49 Ceti ALMA 1.4mm')
-ceti.ax.text(3.6, 3.4, 'rms = {} '.format(int(ceti.rms.round())) + ceti.unit)
-plt.show()
-
-# tyc = cb.add_page('fits_files/TYC_4496_fenclada.fits')
-
-# ceti.make_page(extent=4.5)
+# page.make_page(extent=4.5)
