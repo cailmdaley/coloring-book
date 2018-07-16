@@ -83,9 +83,14 @@ class Page:
     
         if levels is not None:
             contour_levels = np.array(levels) * np.nanmax(self.im)
+            
+            max_ind = np.argmin(np.abs(np.abs(self.ra_offset) - extent))
+            subset_im = self.im[max_ind:-max_ind, max_ind:-max_ind]
+            extent = 'both' if np.nanmin(subset_im) < contour_levels.min() else 'max'
+            
             for_cbar = self.ax.contour(self.ra_offset, self.dec_offset,     
                 im, levels=contour_levels, colors='k', 
-                linewidths=0.75, extend='both')
+                linewidths=0.75, extend=extent)
         else:
             for_cbar = self.ax.imshow(im,
                 extent=[self.ra_offset[0], self.ra_offset[-1], self.dec_offset[-1], self.dec_offset[0]])
@@ -114,36 +119,65 @@ class Page:
         except KeyError: 
             pass
             
-    def add_text(self, text_dict):
-        for align, string in text_dict.items():
-            if align == 'left':
-                # x = 1 - page.ax.get_position().extents[2]
-                x,y = page.ax.get_position().extents[:2]
-            elif align == 'right':
-                x,y = page.ax.get_position().extents[2:0:-1]
-            self.fig.text(x, y, s=string, horizontalalignment=align)
+    def add_text(self, left=[], right=[], center=[]):
+        left_pos  = page.ax.get_position().extents[:2]
+        right_pos = page.ax.get_position().extents[2:0:-1]
+        center_pos = [(left_pos[0] + right_pos[0]) / 2, right_pos[1]-0.03]
+        for lines, pos, align in zip([left, right, center], [left_pos, right_pos, center_pos], ['left', 'right', 'center']):
+            for string in lines:
+                pos[1] -= 0.03
+                self.fig.text(*pos, s=string, horizontalalignment=align)
         
-# page = Page('fits_files/AU_Mic_cdaley.fits')
-# page.make_page(extent=5, levels=[-0.1, 0.1, 0.3, 0.5, 0.7, 0.9])
-# page.add_text({'left' : 'Cail Daley', 'right' : r'AU Mic ALMA {:.2g}'.format(page.wav)})
-# plt.savefig('AU_Mic', dpi=100)
-# plt.show()
-# 
-# page = Page('fits_files/49_Ceti_cdaley.fits')
-# page.make_page(extent=5, levels=[-0.21, 0.21, 0.4, 0.6, 0.8])
-# page.add_text({'left' : 'Jesse Lieman-Sifry & Cail Daley', 'right' : r'49 Ceti ALMA {:.2g}'.format(page.wav)})
-# plt.show()
-# 
-# page = Page('fits_files/TYC_4496_fenclada.fits')
-# page.make_page(levels=[-0.1, 0.1, 0.3, 0.5, 0.7, 0.9], extent=3)
-# page.add_text({'left' : 'Francisco Encalada', 'right' : 'SMA TYC4496-780-1 {:.2g}'.format(page.wav)})
-# plt.show()
+page = Page('ALMA_data/AU_Mic_cdaley.fits')
+page.make_page(extent=5, levels=[-0.1, 0.1, 0.3, 0.5, 0.7, 0.9])
+page.add_text(left=[r'AU Mic ALMA {:.2g}'.format(page.wav)], 
+    right=['Daley et al (in prep.)'], 
+    center=['Cail Daley, Evan Carter, Kevin Flaherty, Zach Lambros'])
+plt.savefig('pages/AU_Mic.pdf', dpi=500);
+plt.show()
 
-# sigma = np.abs(0.33/ (page.head['CDELT1'] * 3600) ) / 2.355
-# page=Page('ALMA_data/Elia_2-27_Perez/CLEANcontinuum.sourceElias227.image.fits'); 
-# page.im -= 0.87 * scipy.ndimage.gaussian_filter(page.im, sigma=sigma); 
-# page.make_page(extent=2, levels=[-0.0192, 0.0192, 0.1, 0.25, 0.5, 0.7, 0.9]); plt.show()
+page = Page('ALMA_data/49_Ceti_cdaley.fits')
+page.make_page(extent=4.99, levels=[-0.17, 0.17, 0.4, 0.6, 0.8, 0.97])
+page.add_text(left=[r'49 Ceti ALMA {:.2g}'.format(page.wav)],
+    right=['Hughes et al. (2017)'],
+    center=['Jesse Lieman-Sifry, Kevin Flaherty, Cail Daley, Zach Lambros'])
+plt.savefig('pages/49_Ceti.pdf', dpi=500)
+plt.show()
 
+page = Page('ALMA_data/TYC_4496_fenclada.fits')
+page.make_page(levels=[-0.110, 0.110, 0.3, 0.5, 0.7, 0.9], extent=3)
+page.add_text(left=['TYC 4496-780-1 SMA {:.2g}'.format(page.wav)],
+    right=['Francisco Encalada, 2013'])
+plt.savefig('pages/TYC_4496.pdf', dpi=500); plt.show()
+
+page=Page('ALMA_data/Elia_2-27_Perez/CLEANcontinuum.sourceElias227.image.fits'); 
+sigma = np.abs(0.33/ (page.head['CDELT1'] * 3600) ) / 2.355
+page.im -= 0.87 * scipy.ndimage.gaussian_filter(page.im, sigma=sigma); 
+page.make_page(extent=1.6, levels=[-0.0192, 0.0192, 0.1, 0.25, 0.5, 0.7, 0.9])
+page.add_text(left=['Elias 2-27 ALMA {:.2g}'.format(page.wav)], 
+    right=[u'Pérez et al. (2016)'])
+plt.savefig('pages/Elias_2-27.pdf', dpi=500); plt.show()
+
+page = Page('ALMA_data/HD142527_Kataoka/concat.ms.clean.field5.StokesI.pbcor.fits')
+page.make_page(extent=1.9, levels=[-0.055, 0.055, 0.15, 0.3, 0.45, .6, .75, 0.9]); 
+page.add_text(left=['HD 142527 ALMA {:.2g}'.format(page.wav)], 
+    right=[u'Katoaka et al. (2016)'])
+plt.savefig('pages/HD_142527.pdf', dpi=500); plt.show()
+
+page=Page('../../alyssa/dmtau/new_data/FIXED/dmtau_cont_bin.fits')
+page.make_page(extent=1.7, levels=[-0.015, 0.015, 0.1, 0.4, 0.7, 0.9])
+page.add_text(left=['DM Tau ALMA {:.2g}'.format(page.wav)], 
+    right=['Alyssa Bulatek, 2017'])
+plt.savefig('pages/DM_Tau.pdf', dpi=500); plt.show()
+
+page = Page(file); page.make_page(); plt.show()
+page = Page(file); page.make_page(); plt.show()
+
+
+# for file in files:
+#     print(file)
+#     page = Page(file); page.make_page(); plt.show()
+    
 # files = glob('ALMA_data/TW_Hya_Cleeves/*TW_Hya*cube*.pbcor.fits'); files.sort()
 # files[2.]
 # for file in files:
@@ -159,5 +193,7 @@ class Page:
 # for i in range(center_ind-15, center_ind+15, 1):
 #     page.make_page(levels=[-0.1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], extent=4, channel_ind=i)
 #     plt.show()
+
+
 
 # #     f
